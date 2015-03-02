@@ -4,7 +4,7 @@
 // Generate object for js
 
 var STEPS = 3;
-var SCALE = 1.0;
+var SCALE = 10.0/256.0;
 var PRECISION = 3;
 
 var D = activeDocument;
@@ -29,7 +29,7 @@ function bezier2lines(p1,p2,p3,p4, steps) {
         var p = bezier(p1, p2, p3, p4, 1.0*i/steps);
         var x = p.x-x0;
         var y = p.y-y0;
-        path += "l"+x.toFixed(PRECISION)+","+y.toFixed(PRECISION)+" ";
+        path += "l "+x.toFixed(PRECISION)+","+(-y).toFixed(PRECISION)+" ";
         x0 = p.x;
         y0 = p.y;
     }
@@ -54,7 +54,7 @@ function parseSegment(a,b) {
    } else { 
      x = (b.anchor[0]-a.anchor[0])*SCALE;
      y = (b.anchor[1]-a.anchor[1])*SCALE;
-     path+= "l"+x.toFixed(PRECISION)+","+y.toFixed(PRECISION)+" ";
+     path+= "l "+x.toFixed(PRECISION)+","+(-y).toFixed(PRECISION)+" ";
    }
    return path;
 }
@@ -74,7 +74,7 @@ function parsePath(c, m) {
        if(j==0) {
             x = (b.anchor[0]-m[0])*SCALE;
             y = (b.anchor[1]-m[1])*SCALE;
-            path+="m"+x.toFixed(PRECISION)+","+y.toFixed(PRECISION)+" ";
+            path+="m "+x.toFixed(PRECISION)+","+(-y).toFixed(PRECISION)+" ";
             continue;
        }
        a = points[j-1]
@@ -95,16 +95,33 @@ function checkName(n) {
   return n;
 }
 
+function getLastPoint(c) {
+    var p, pp, ppp;
+    pp = c; // prev path points
+    ppp = pp.pathPoints;            
+    if(pp.closed) p = ppp[0];
+    else p = ppp[ppp.length-1];
+    return p    
+    
+}
+
 function parseFont(l) {
     var data = "";
     // single path 
     for(var i=0;i<l.pathItems.length; i++){
         var c=l.pathItems[i]
+        var p,w,z,x,y;
         if(c && c.name.length>0) {
-            c.geometricBounds[2]
+            
+            p = getLastPoint(c);
+            w = c.geometricBounds[2]*SCALE;
+            x = -p.anchor[0]*SCALE
+            y = -p.anchor[1]*SCALE
+            z = "m "+x.toFixed(PRECISION)+","+(-y).toFixed(PRECISION)+" "
+           
             data += "    \"" + checkName(c.name) + "\":\n";
-            data += "        d: \""+parsePath(c, [0, 0])+"\"\n";
-            data += "        w: "+(c.geometricBounds[2]*SCALE).toFixed(PRECISION)+"\n";
+            data += "        d: \""+parsePath(c, [0, 0])+z+"\"\n";
+            data += "        w: "+w.toFixed(PRECISION)+"\n";
         }
     }
 
@@ -112,7 +129,7 @@ function parseFont(l) {
     for (var i=0; i<l.compoundPathItems.length; i++) {
         var c = l.compoundPathItems[i];
         var path = "";
-        var m;
+        var m, p, w, z, x, y;
         
         if(c && c.name.length>0) {
             data += "    \""+checkName(c.name)+"\":\n";
@@ -120,19 +137,19 @@ function parseFont(l) {
             for(var j=0; j<c.pathItems.length; j++) {
                 if(j==0) m = [0,0]
                 else {
-                    var p, pp, ppp;
-                    pp = c.pathItems[j-1]; // prev path points
-                    ppp = pp.pathPoints;            
-                    if(pp.closed) p = ppp[0];
-                    else p = ppp[ppp.length-1];
-                    
+                    p = getLastPoint(c.pathItems[j-1]);
                     m = [p.anchor[0], p.anchor[1]];
                 }
                 var s = c.pathItems[j];
                 path += parsePath(s, m);
             }
-            data += "        d: \""+path+"\"\n";
-            data += "        w: "+(c.geometricBounds[2]*SCALE).toFixed(PRECISION)+"\n";
+            p = getLastPoint(c.pathItems[c.pathItems.length-1]);
+            w = c.geometricBounds[2]*SCALE;
+            x = -p.anchor[0]*SCALE;
+            y = -p.anchor[1]*SCALE;
+            z = "m "+x.toFixed(PRECISION)+","+(-y).toFixed(PRECISION)+" ";
+            data += "        d: \""+path+z+"\"\n";
+            data += "        w: "+w.toFixed(PRECISION)+"\n";
         }
     }
     return data;
@@ -150,7 +167,7 @@ if(L) {
     var f= File(D.path+"/font.coffee");
     f.remove();
     f.open("w");
-    f.write("GHOST=\n");
+    f.write("module.exports=\nGOST:\n");
     f.write(data);
     f.close();
 
